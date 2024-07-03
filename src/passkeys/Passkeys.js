@@ -3,12 +3,36 @@ import { webAuthCreate, webAuthGet } from "./webAuthnGet";
 import attestationResponse from "./attestationResponse.json";
 import { useState } from "react";
 import assertionResponse from "./assertionResnponse.json";
+import { useEffect } from "react";
 const Passkeys = () => {
   const [pubKey, setPubKey] = useState("");
   const [pubKey2, setPubKey2] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [credentialsId, setCredentialsId] = useState([]);
+  const [mediationValue, setMediationValue] = useState("");
   const [textCredential, setTextCredential] = useState("");
+  const [objectAssertion, setObjectAssertion] = useState({});
+
+  useEffect(() => {
+    setObjectAssertion({
+      publicKey: {
+        allowCredentials: credentialsId.map((value) => {
+          return {
+            id: value,
+            transports: ["internal"],
+            type: "public-key",
+          };
+        }),
+        challenge: assertionResponse.challenge,
+        extensions: assertionResponse.extensions,
+        rpId: assertionResponse.rpId,
+        timeout: assertionResponse.timeout,
+        userVerification: assertionResponse.userVerification,
+      },
+      mediation: mediationValue,
+    });
+  }, [mediationValue, credentialsId]);
+
   const handleChange = (event) => {
     setInputValue(event.target.value);
   };
@@ -24,15 +48,14 @@ const Passkeys = () => {
     setPubKey(JSON.stringify(publicKeyCredential));
   }
   async function handleClickOnGet() {
-    console.log(attestationResponse);
-    const publicKeyCredential2 = await webAuthGet(
-      assertionResponse,
-      credentialsId
-    );
+    const publicKeyCredential2 = await webAuthGet(objectAssertion);
     setPubKey2(JSON.stringify(publicKeyCredential2));
   }
   const add = () => {
     setCredentialsId([...credentialsId, textCredential]);
+  };
+  const handleSelectChange = (event) => {
+    setMediationValue(event.target.value);
   };
   return (
     <div>
@@ -45,6 +68,15 @@ const Passkeys = () => {
       <button onClick={handleClickOnCreate}>Create Passkey</button>
       <div>{pubKey}</div>
       <div>
+        <select value={mediationValue} onChange={handleSelectChange}>
+          <option value="">Select transport</option>
+          <option value="conditional">Conditional</option>
+          <option value="optional">Optional</option>
+          <option value="required">required</option>
+          <option value="silent">silent</option>
+        </select>
+      </div>
+      <div>
         add credentialId to payload{" "}
         <input
           value={textCredential}
@@ -53,11 +85,8 @@ const Passkeys = () => {
         />
         <button onClick={add}>Add</button>
       </div>
-      <div>
-        {credentialsId.map((value) => (
-          <div>{value}</div>
-        ))}
-      </div>
+
+      <div>{JSON.stringify(objectAssertion)}</div>
       <button onClick={handleClickOnGet}>Get Passkey</button>
       <div>{pubKey2}</div>
     </div>

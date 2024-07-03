@@ -15,29 +15,13 @@ export function webAuthCreate(attestationOptionsResponse, inputValue) {
       timeout: attestationOptionsResponse.timeout,
       user: {
         id: attestationOptionsResponse.user.id,
-        name: { inputValue },
-        displayName: { inputValue },
+        name: inputValue,
+        displayName: inputValue,
       },
     },
   });
 }
 
-export function webAuthGet(assertionOptionsResponse, credentialsId) {
-  return get({
-    publicKey: {
-      allowCredentials: credentialsId.map((value) => {
-        return {
-          id: value,
-          transports: ["internal"],
-          type: "public-key",
-        };
-      }),
-      challenge: assertionOptionsResponse.challenge,
-      extensions: assertionOptionsResponse.extensions,
-      rpId: assertionOptionsResponse.rpId,
-      timeout: assertionOptionsResponse.timeout,
-      userVerification: assertionOptionsResponse.userVerification,
-    },
-    mediation: "silent",
-  });
+export function webAuthGet(objectAssertion) {
+  return get(...objectAssertion);
 }
