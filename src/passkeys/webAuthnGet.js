@@ -14,7 +14,7 @@ export function webAuthCreate(attestationOptionsResponse, inputValue) {
       rp: attestationOptionsResponse.rp,
       timeout: attestationOptionsResponse.timeout,
       user: {
-        id: attestationOptionsResponse.user.id,
+        id: inputValue,
         name: inputValue,
         displayName: inputValue,
       },
