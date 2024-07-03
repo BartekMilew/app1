@@ -1,4 +1,4 @@
-import { create } from "@github/webauthn-json";
+import { create, get } from "@github/webauthn-json";
 
 export function webAuthCreate(attestationOptionsResponse) {
   console.log(attestationOptionsResponse, "to");
@@ -19,6 +19,19 @@ export function webAuthCreate(attestationOptionsResponse) {
         name: "click",
         displayName: "click",
       },
+    },
+  });
+}
+
+export function webAuthGet(assertionOptionsResponse) {
+  return get({
+    publicKey: {
+      allowCredentials: assertionOptionsResponse.allowCredentials,
+      challenge: assertionOptionsResponse.challenge,
+      extensions: assertionOptionsResponse.extensions,
+      rpId: assertionOptionsResponse.rpId,
+      timeout: assertionOptionsResponse.timeout,
+      userVerification: assertionOptionsResponse.userVerification,
     },
   });
 }

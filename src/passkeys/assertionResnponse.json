@@ -1,0 +1,19 @@
+{
+  "status": "ok",
+  "errorMessage": "",
+  "rpId": "bartekmilew.github.io",
+  "challenge": "o6cd23dd2d23d32d3d2d32d",
+  "timeout": 180000,
+  "allowCredentials": [],
+  "userVerification": "required",
+  "attestationFormats": [
+    "packed",
+    "tpm",
+    "android-key",
+    "android-safetynet",
+    "fido-u2f",
+    "apple",
+    "none"
+  ],
+  "extensions": {}
+}
