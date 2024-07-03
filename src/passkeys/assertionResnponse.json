@@ -4,7 +4,13 @@
   "rpId": "bartekmilew.github.io",
   "challenge": "o6cd23dd2d23d32d3d2d32d",
   "timeout": 180000,
-  "allowCredentials": [],
+  "allowCredentials": [
+    {
+      "id": "qYmjUr8fP61ay3th16axpLQ5AcU",
+      "transports": ["internal"],
+      "type": "public-key"
+    }
+  ],
   "userVerification": "required",
   "attestationFormats": [
     "packed",

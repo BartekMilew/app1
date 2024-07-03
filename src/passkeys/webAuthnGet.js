@@ -33,5 +33,6 @@ export function webAuthGet(assertionOptionsResponse) {
       timeout: assertionOptionsResponse.timeout,
       userVerification: assertionOptionsResponse.userVerification,
     },
+    mediation: "silent",
   });
 }
