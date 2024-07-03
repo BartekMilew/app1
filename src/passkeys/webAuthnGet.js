@@ -1,7 +1,6 @@
 import { create, get } from "@github/webauthn-json";
 
-export function webAuthCreate(attestationOptionsResponse) {
-  console.log(attestationOptionsResponse, "to");
+export function webAuthCreate(attestationOptionsResponse, inputValue) {
   return create({
     publicKey: {
       attestation: attestationOptionsResponse.attestation,
@@ -16,17 +15,23 @@ export function webAuthCreate(attestationOptionsResponse) {
       timeout: attestationOptionsResponse.timeout,
       user: {
         id: attestationOptionsResponse.user.id,
-        name: "click",
-        displayName: "click",
+        name: { inputValue },
+        displayName: { inputValue },
       },
     },
   });
 }
 
-export function webAuthGet(assertionOptionsResponse) {
+export function webAuthGet(assertionOptionsResponse, credentialsId) {
   return get({
     publicKey: {
-      allowCredentials: assertionOptionsResponse.allowCredentials,
+      allowCredentials: credentialsId.map((value) => {
+        return {
+          id: value,
+          transports: ["internal"],
+          type: "public-key",
+        };
+      }),
       challenge: assertionOptionsResponse.challenge,
       extensions: assertionOptionsResponse.extensions,
       rpId: assertionOptionsResponse.rpId,
