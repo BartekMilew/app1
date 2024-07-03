@@ -1,11 +1,12 @@
 import logo from "./logo.svg";
 import "./App.css";
+import Passkeys from "./passkeys/Passkeys";
 
 function App() {
   return (
     <div className="App">
       <p>App1</p>
-      {/* <iframe name="app2" src="https://192.168.100.12:3001/" width="100% " /> */}
+      <Passkeys />
     </div>
   );
 }

@@ -8,11 +8,7 @@ const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
     <p>App1</p>
-    <iframe
-      name="app2"
-      src="https://app2-bartoszs-projects-6ee0ba76.vercel.app/"
-      width="100% "
-    />
+    <App />
   </React.StrictMode>
 );
 

@@ -1,0 +1,28 @@
+{
+  "attestation": "direct",
+  "authenticatorSelection": {
+    "authenticatorAttachment": "platform",
+    "requireResidentKey": true,
+    "userVerification": "required"
+  },
+  "challenge": "o6cd23dd2d23d32d3d2d32d",
+  "errorMessage": "",
+  "excludeCredentials": [],
+  "pubKeyCredParams": [
+    {
+      "alg": -7,
+      "type": "public-key"
+    }
+  ],
+  "rp": {
+    "id": "localhost",
+    "name": "example1"
+  },
+  "status": "ok",
+  "timeout": 180000,
+  "user": {
+    "displayName": "jaaa",
+    "id": "sas",
+    "name": "example1"
+  }
+}
