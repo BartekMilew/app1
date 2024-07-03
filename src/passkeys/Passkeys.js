@@ -9,7 +9,7 @@ const Passkeys = () => {
   const [pubKey2, setPubKey2] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [credentialsId, setCredentialsId] = useState([]);
-  const [mediationValue, setMediationValue] = useState("");
+  const [mediationValue, setMediationValue] = useState(undefined);
   const [textCredential, setTextCredential] = useState("");
   const [objectAssertion, setObjectAssertion] = useState({});
 
@@ -29,7 +29,7 @@ const Passkeys = () => {
         timeout: assertionResponse.timeout,
         userVerification: assertionResponse.userVerification,
       },
-      mediation: mediationValue,
+      ...(mediationValue && { mediation: mediationValue }),
     });
   }, [mediationValue, credentialsId]);
 
@@ -70,8 +70,8 @@ const Passkeys = () => {
       <div>
         <select value={mediationValue} onChange={handleSelectChange}>
           <option value="">Select transport</option>
-          <option value="conditional">Conditional</option>
-          <option value="optional">Optional</option>
+          <option value="conditional">conditional</option>
+          <option value="optional">optional</option>
           <option value="required">required</option>
           <option value="silent">silent</option>
         </select>

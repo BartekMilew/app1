@@ -23,5 +23,5 @@ export function webAuthCreate(attestationOptionsResponse, inputValue) {
 }
 
 export function webAuthGet(objectAssertion) {
-  return get(...objectAssertion);
+  return get(objectAssertion);
 }
