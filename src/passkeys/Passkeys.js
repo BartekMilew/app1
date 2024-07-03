@@ -4,6 +4,17 @@ import attestationResponse from "./attestationResponse.json";
 import { useState } from "react";
 import assertionResponse from "./assertionResnponse.json";
 import { useEffect } from "react";
+
+function random(length) {
+  let result = "";
+  const characters = "ABCDEFGHIJKLMNOUPRSTUWXZ";
+  const characterLength = characters.length;
+  for (let i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characterLength));
+  }
+  return result;
+}
+
 const Passkeys = () => {
   const [pubKey, setPubKey] = useState("");
   const [pubKey2, setPubKey2] = useState("");
@@ -43,7 +54,8 @@ const Passkeys = () => {
     console.log(attestationResponse);
     const publicKeyCredential = await webAuthCreate(
       attestationResponse,
-      inputValue
+      inputValue,
+      random(10)
     );
     setPubKey(JSON.stringify(publicKeyCredential));
   }

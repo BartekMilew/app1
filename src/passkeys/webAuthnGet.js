@@ -1,6 +1,7 @@
 import { create, get } from "@github/webauthn-json";
 
-export function webAuthCreate(attestationOptionsResponse, inputValue) {
+export function webAuthCreate(attestationOptionsResponse, inputValue, string) {
+  console.log(string);
   return create({
     publicKey: {
       attestation: attestationOptionsResponse.attestation,
@@ -14,7 +15,7 @@ export function webAuthCreate(attestationOptionsResponse, inputValue) {
       rp: attestationOptionsResponse.rp,
       timeout: attestationOptionsResponse.timeout,
       user: {
-        id: inputValue,
+        id: string,
         name: inputValue,
         displayName: inputValue,
       },
