@@ -23,7 +23,7 @@ const Device = () => {
       <div>{JSON.stringify(uaParser1Results)}</div>
       <div>uaParser2</div>
       <div>{JSON.stringify(uaParser2Results)}</div>
-      <div>uaParser3</div>
+      <div>uaParser3-2</div>
       <div>is Ipad{isIPad ? "true" : "false"}</div>
     </>
   );
