@@ -7,10 +7,14 @@ const Device = () => {
   console.log(uaParser1Results);
   const uaParser2Results = uaParser1.getDevice().withFeatureCheck();
   console.log(uaParser2Results, "2results");
+  const check =
+    "standalone" in window.navigator && window.navigator["standalone"];
   let isIPad =
+    typeof window !== "undefined" &&
     /Macintosh/i.test(navigator.userAgent) &&
+    typeof check !== "undefined" &&
     navigator.maxTouchPoints &&
-    navigator.maxTouchPoints > 1;
+    navigator.maxTouchPoints > 2;
 
   console.log(isIPad);
   return (
