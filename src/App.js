@@ -1,16 +1,8 @@
-import logo from "./logo.svg";
-import "./App.css";
-import Passkeys from "./passkeys/Passkeys";
-import Device from "./passkeys/Device";
+import React from 'react';
+import IframeView from './IframeView';
+import PopupView from './PopupView';
+import { isPopupMode } from './lib/store';
 
-function App() {
-  return (
-    <div className="App">
-      <p>App1</p>
-      <Passkeys />
-      <Device />
-    </div>
-  );
+export default function App() {
+  return isPopupMode() ? <PopupView /> : <IframeView />;
 }
-
-export default App;
