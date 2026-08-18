@@ -43,3 +43,7 @@ export function idbGet(key) {
 export function idbGetFrom(factory, key) {
   return tx(factory, 'readonly', (store) => store.get(key));
 }
+
+export function idbDelete(key) {
+  return tx(indexedDB, 'readwrite', (store) => store.delete(key));
+}

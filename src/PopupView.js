@@ -2,9 +2,12 @@ import React, { useCallback, useEffect, useState } from 'react';
 import Json from './components/Json';
 import { requestFromOpener } from './lib/bridge';
 import {
+  clearOwnBucket,
   decryptRecord,
   getOpenerKey,
+  getOpenerKeyMeta,
   getOwnKey,
+  getOwnKeyMeta,
   readCryptoKeyFromOpener,
   readOpenerCipherRecord,
   readOpenerSessionData,
@@ -79,7 +82,34 @@ export default function PopupView() {
         run: async () => {
           const key = await getOwnKey();
           if (!key) throw new Error('Brak klucza we własnym buckecie');
-          return decryptRecord(crypto.subtle, key, record);
+          // A key IS here — but is it the same one? AES-GCM would only report a
+          // bare OperationError, which reads like a plumbing fault rather than
+          // what it is: a different key, i.e. proof of a separate bucket.
+          const ownMeta = await getOwnKeyMeta();
+          let openerMeta = null;
+          try {
+            openerMeta = await getOpenerKeyMeta();
+          } catch (e) {
+            // opener bucket unreachable; fall through with what we have
+          }
+          try {
+            return await decryptRecord(crypto.subtle, key, record);
+          } catch (e) {
+            if (e.name === 'OperationError') {
+              throw new Error(
+                `OperationError — inny klucz niż szyfrujący (tag GCM nie pasuje).
+` +
+                  `mój bucket:    id=${ownMeta && ownMeta.id} utworzony w=${
+                    ownMeta && ownMeta.createdIn
+                  } ${ownMeta && ownMeta.createdAt}
+` +
+                  `bucket iframe: id=${openerMeta && openerMeta.id} utworzony w=${
+                    openerMeta && openerMeta.createdIn
+                  } ${openerMeta && openerMeta.createdAt}`
+              );
+            }
+            throw e;
+          }
         },
       },
       {
@@ -121,6 +151,14 @@ export default function PopupView() {
       <section>
         <button className="primary" onClick={run}>
           Odczytaj ponownie
+        </button>
+        <button
+          onClick={async () => {
+            await clearOwnBucket();
+            run();
+          }}
+        >
+          Wyczyść mój bucket
         </button>
       </section>
 

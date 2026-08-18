@@ -1,4 +1,4 @@
-import { idbGet, idbGetFrom, idbPut } from './idb';
+import { idbDelete, idbGet, idbGetFrom, idbPut } from './idb';
 
 export const IDB_KEY_ID = 'test-crypto-key';
 export const IDB_META_ID = 'test-crypto-key-meta';
@@ -218,4 +218,19 @@ export function getOwnKey() {
 
 export function getOpenerKey() {
   return idbGetFrom(window.opener.indexedDB, IDB_KEY_ID);
+}
+
+export function getOwnKeyMeta() {
+  return idbGet(IDB_META_ID);
+}
+
+export function getOpenerKeyMeta() {
+  return idbGetFrom(window.opener.indexedDB, IDB_META_ID);
+}
+
+// Wipe this context's own bucket, so a stale first-party key cannot be mistaken
+// for a partitioning result.
+export async function clearOwnBucket() {
+  await idbDelete(IDB_KEY_ID);
+  await idbDelete(IDB_META_ID);
 }
