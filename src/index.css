@@ -112,3 +112,17 @@ button.primary {
   background: #ff6b6b26;
   color: var(--err);
 }
+
+.attempt {
+  margin-bottom: 10px;
+}
+
+.attempt-head {
+  margin-bottom: 4px;
+  color: var(--muted);
+}
+
+.json.plain {
+  color: var(--ok);
+  font-weight: 600;
+}

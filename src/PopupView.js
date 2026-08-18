@@ -2,56 +2,106 @@ import React, { useCallback, useEffect, useState } from 'react';
 import Json from './components/Json';
 import { requestFromOpener } from './lib/bridge';
 import {
+  decryptRecord,
+  getOpenerKey,
+  getOwnKey,
   readCryptoKeyFromOpener,
+  readOpenerCipherRecord,
   readOpenerSessionData,
   readOwnSessionData,
   storageDiagnostics,
 } from './lib/store';
 
+const PENDING = { status: 'pending' };
+
 export default function PopupView() {
-  const [idbResult, setIdbResult] = useState({ status: 'pending' });
-  const [openerResult, setOpenerResult] = useState({ status: 'pending' });
-  const [bridgeResult, setBridgeResult] = useState({ status: 'pending' });
+  const [idbResult, setIdbResult] = useState(PENDING);
+  const [openerResult, setOpenerResult] = useState(PENDING);
+  const [cipherResult, setCipherResult] = useState(PENDING);
+  const [attempts, setAttempts] = useState([]);
   const [ownSession, setOwnSession] = useState(null);
   const [diag, setDiag] = useState(null);
 
   const run = useCallback(async () => {
-    setIdbResult({ status: 'pending' });
+    setIdbResult(PENDING);
+    setAttempts([]);
+
+    // 1. Can we even SEE the key object?
     try {
       const info = await readCryptoKeyFromOpener();
       setIdbResult(
         info
           ? { status: 'ok', value: info }
-          : {
-              status: 'empty',
-              error: 'Brak klucza w opener.indexedDB (baza otwarta, ale pusta)',
-            }
+          : { status: 'empty', error: 'Brak klucza w opener.indexedDB' }
       );
     } catch (e) {
       setIdbResult({ status: 'error', error: `${e.name}: ${e.message}` });
     }
 
+    // 2. sessionStorage of the opener.
     const opener = readOpenerSessionData();
-    if (!opener.ok) {
-      setOpenerResult({ status: 'error', error: opener.error });
-    } else if (opener.value === null) {
+    if (!opener.ok) setOpenerResult({ status: 'error', error: opener.error });
+    else if (opener.value === null)
       setOpenerResult({ status: 'empty', error: 'opener.sessionStorage pusty' });
-    } else {
-      setOpenerResult({ status: 'ok', value: opener.value });
-    }
+    else setOpenerResult({ status: 'ok', value: opener.value });
 
-    setBridgeResult({ status: 'pending' });
-    const bridge = await requestFromOpener();
-    if (!bridge.ok) {
-      setBridgeResult({ status: 'error', error: bridge.error });
-    } else if (bridge.value && bridge.value.ok === false) {
-      setBridgeResult({ status: 'error', error: bridge.value.error });
-    } else {
-      setBridgeResult({ status: 'ok', value: bridge.value });
+    // 3. The ciphertext the iframe produced.
+    let record = null;
+    try {
+      record = readOpenerCipherRecord();
+      setCipherResult(
+        record
+          ? { status: 'ok', value: record }
+          : { status: 'empty', error: 'Brak szyfrogramu w opener.sessionStorage' }
+      );
+    } catch (e) {
+      setCipherResult({ status: 'error', error: `${e.name}: ${e.message}` });
     }
 
     setOwnSession(readOwnSessionData());
     setDiag(await storageDiagnostics());
+
+    if (!record) return;
+
+    // 4. The actual question: can we USE the key, and whose WebCrypto does it?
+    const openerSubtle = window.opener && window.opener.crypto.subtle;
+    const matrix = [
+      {
+        name: 'klucz z opener.indexedDB + crypto.subtle POPUPU',
+        run: async () => decryptRecord(crypto.subtle, await getOpenerKey(), record),
+      },
+      {
+        name: 'klucz z opener.indexedDB + crypto.subtle OPENERA',
+        run: async () => decryptRecord(openerSubtle, await getOpenerKey(), record),
+      },
+      {
+        name: 'klucz z własnego indexedDB + crypto.subtle popupu',
+        run: async () => {
+          const key = await getOwnKey();
+          if (!key) throw new Error('Brak klucza we własnym buckecie');
+          return decryptRecord(crypto.subtle, key, record);
+        },
+      },
+      {
+        name: 'postMessage — deszyfruje iframe u siebie',
+        run: async () => {
+          const res = await requestFromOpener('decrypt', record);
+          if (!res.ok) throw new Error(res.error);
+          if (res.value && res.value.ok === false) throw new Error(res.value.error);
+          return res.value.plaintext;
+        },
+      },
+    ];
+
+    for (const attempt of matrix) {
+      let outcome;
+      try {
+        outcome = { status: 'ok', value: await attempt.run() };
+      } catch (e) {
+        outcome = { status: 'error', error: `${e.name}: ${e.message}` };
+      }
+      setAttempts((prev) => [...prev, { name: attempt.name, ...outcome }]);
+    }
   }, []);
 
   useEffect(() => {
@@ -74,16 +124,30 @@ export default function PopupView() {
         </button>
       </section>
 
-      <Result title="window.opener.indexedDB — CryptoKey zapisany przez iframe" result={idbResult} />
-      <Result
-        title="window.opener.sessionStorage — dane z iframe"
-        result={openerResult}
-      />
+      <section>
+        <h2>Deszyfrowanie — cztery drogi</h2>
+        {attempts.length === 0 ? (
+          <pre className="json empty">czekam na szyfrogram…</pre>
+        ) : (
+          attempts.map((a) => (
+            <div key={a.name} className="attempt">
+              <div className="attempt-head">
+                <span className={`badge ${a.status}`}>{a.status}</span> {a.name}
+              </div>
+              <pre className={`json ${a.status === 'ok' ? 'plain' : 'empty'}`}>
+                {a.status === 'ok' ? a.value : a.error}
+              </pre>
+            </div>
+          ))
+        )}
+      </section>
 
+      <Result title="Szyfrogram z opener.sessionStorage" result={cipherResult} />
       <Result
-        title="postMessage do openera — iframe czyta swój storage za nas"
-        result={bridgeResult}
+        title="window.opener.indexedDB — CryptoKey zapisany przez iframe"
+        result={idbResult}
       />
+      <Result title="window.opener.sessionStorage — dane z iframe" result={openerResult} />
 
       <section>
         <h2>Własny sessionStorage popupu</h2>

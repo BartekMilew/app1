@@ -4,14 +4,12 @@
 // IndexedDB lives in the (top=A, origin=B) bucket, while the popup is a
 // top-level B window and therefore reads the (top=B, origin=B) bucket. The
 // popup cannot reach the iframe's data itself — but the iframe still can, so we
-// ask the iframe to read it and post the result back.
+// ask the iframe to read (or decrypt) it and post the result back.
 
-export const REQUEST_TYPE = 'origin-b:request-storage';
-export const RESPONSE_TYPE = 'origin-b:storage-response';
+export const REQUEST_TYPE = 'origin-b:request';
+export const RESPONSE_TYPE = 'origin-b:response';
 
-// A CryptoKey is structured-cloneable but non-extractable keys cannot cross an
-// agent cluster boundary reliably, so we ship a serialisable description.
-export function requestFromOpener(timeoutMs = 3000) {
+export function requestFromOpener(action, payload, timeoutMs = 3000) {
   return new Promise((resolve) => {
     if (!window.opener) {
       resolve({ ok: false, error: 'Brak window.opener' });
@@ -35,9 +33,11 @@ export function requestFromOpener(timeoutMs = 3000) {
     };
 
     try {
-      window.opener.postMessage({ type: REQUEST_TYPE }, window.location.origin, [
-        channel.port2,
-      ]);
+      window.opener.postMessage(
+        { type: REQUEST_TYPE, action, payload },
+        window.location.origin,
+        [channel.port2]
+      );
     } catch (e) {
       clearTimeout(timer);
       resolve({ ok: false, error: `${e.name}: ${e.message}` });
@@ -45,7 +45,7 @@ export function requestFromOpener(timeoutMs = 3000) {
   });
 }
 
-export function serveBridge(readPayload) {
+export function serveBridge(handle) {
   const onMessage = async (event) => {
     if (event.origin !== window.location.origin) return;
     if (!event.data || event.data.type !== REQUEST_TYPE) return;
@@ -53,7 +53,7 @@ export function serveBridge(readPayload) {
     if (!port) return;
     let payload;
     try {
-      payload = { ok: true, ...(await readPayload()) };
+      payload = { ok: true, ...(await handle(event.data.action, event.data.payload)) };
     } catch (e) {
       payload = { ok: false, error: `${e.name}: ${e.message}` };
     }

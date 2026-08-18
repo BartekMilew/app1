@@ -3,15 +3,31 @@ import { idbGet, idbGetFrom, idbPut } from './idb';
 export const IDB_KEY_ID = 'test-crypto-key';
 export const IDB_META_ID = 'test-crypto-key-meta';
 export const SESSION_KEY = 'origin-b-test-data';
+export const SESSION_CIPHER_KEY = 'origin-b-ciphertext';
 export const POPUP_PARAM = 'popup';
 
 export function isPopupMode() {
   return new URLSearchParams(window.location.search).get(POPUP_PARAM) === '1';
 }
 
-// Storage Access API: asks the browser to hand this third-party frame the
-// unpartitioned (first-party) storage bucket for origin B — the same bucket the
-// top-level popup will read. Must be called from a user gesture.
+export function popupUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.set(POPUP_PARAM, '1');
+  return url.toString();
+}
+
+// ---------------------------------------------------------------- base64 ---
+
+function toB64(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+
+function fromB64(str) {
+  return Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
+}
+
+// ------------------------------------------------------- storage access ---
+
 export async function requestStorageAccess() {
   if (!document.requestStorageAccess) {
     return { ok: false, error: 'Storage Access API niedostępne' };
@@ -20,8 +36,6 @@ export async function requestStorageAccess() {
     const hadBefore = document.hasStorageAccess
       ? await document.hasStorageAccess()
       : null;
-    // Chrome supports the `{ all: true }` form for non-cookie storage; Safari and
-    // Firefox ignore the argument and grant their own flavour of access.
     try {
       await document.requestStorageAccess({ all: true });
     } catch (e) {
@@ -51,80 +65,123 @@ export async function storageDiagnostics() {
     out.hasStorageAccess = `${e.name}: ${e.message}`;
   }
   try {
-    out.storageEstimate = navigator.storage && navigator.storage.estimate
-      ? await navigator.storage.estimate()
-      : null;
+    out.storageEstimate =
+      navigator.storage && navigator.storage.estimate
+        ? await navigator.storage.estimate()
+        : null;
   } catch (e) {
     out.storageEstimate = `${e.name}: ${e.message}`;
   }
   return out;
 }
 
-export function popupUrl() {
-  const url = new URL(window.location.href);
-  url.searchParams.set(POPUP_PARAM, '1');
-  return url.toString();
-}
+// ------------------------------------------------------------ crypto key ---
 
-// Non-extractable ECDSA key pair — the private key can only ever be read back
-// as a CryptoKey object, which is exactly what we want to prove survives the
-// iframe -> popup hop within the same (partitioned or not) storage bucket.
+// AES-GCM, non-extractable: the popup can never read the raw bytes, so the only
+// way to prove it really has the key is to decrypt with it.
 export async function createAndStoreCryptoKey() {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: 'ECDSA', namedCurve: 'P-256' },
+  const key = await crypto.subtle.generateKey(
+    { name: 'AES-GCM', length: 256 },
     false, // non-extractable
-    ['sign', 'verify']
+    ['encrypt', 'decrypt']
   );
 
   const meta = {
     createdAt: new Date().toISOString(),
     createdIn: isPopupMode() ? 'popup' : 'iframe',
-    algorithm: 'ECDSA P-256',
+    algorithm: 'AES-GCM 256',
     id: crypto.randomUUID(),
   };
 
-  await idbPut(IDB_KEY_ID, keyPair);
+  await idbPut(IDB_KEY_ID, key);
   await idbPut(IDB_META_ID, meta);
   return meta;
 }
 
-function describeKeyPair(keyPair, meta, scope) {
+function describeKey(key, meta, scope) {
   return {
     scope,
     meta: meta || null,
-    publicKeyType: keyPair.publicKey && keyPair.publicKey.type,
-    privateKeyType: keyPair.privateKey && keyPair.privateKey.type,
-    extractable: keyPair.privateKey && keyPair.privateKey.extractable,
-    algorithm: keyPair.privateKey && keyPair.privateKey.algorithm,
-    usages: keyPair.privateKey && keyPair.privateKey.usages,
-    // The key was cloned out of another window's realm, so `instanceof
-    // CryptoKey` against *our* realm would lie. Compare against the realm the
-    // object actually came from.
-    constructorName:
-      keyPair.privateKey && keyPair.privateKey.constructor
-        ? keyPair.privateKey.constructor.name
-        : null,
+    type: key.type,
+    extractable: key.extractable,
+    algorithm: key.algorithm,
+    usages: key.usages,
+    // The key may have been cloned out of another realm, where `instanceof
+    // CryptoKey` against our realm would lie.
+    constructorName: key.constructor ? key.constructor.name : null,
   };
 }
 
 export async function readCryptoKey() {
-  const keyPair = await idbGet(IDB_KEY_ID);
+  const key = await idbGet(IDB_KEY_ID);
   const meta = await idbGet(IDB_META_ID);
-  if (!keyPair) return null;
-  return describeKeyPair(keyPair, meta, 'own');
+  return key ? describeKey(key, meta, 'own') : null;
 }
 
-// Reach the opener's IDBFactory directly instead of our own. Same origin (B),
-// so the property access is allowed; the point is that `window.opener.indexedDB`
-// is bound to the opener's environment settings object, i.e. the iframe's
+// Reach the opener's IDBFactory directly: `window.opener.indexedDB` resolves
+// against the opener's environment settings object, i.e. the iframe's
 // (possibly partitioned) storage bucket rather than the popup's top-level one.
 export async function readCryptoKeyFromOpener() {
   const factory = window.opener.indexedDB;
-  const keyPair = await idbGetFrom(factory, IDB_KEY_ID);
+  const key = await idbGetFrom(factory, IDB_KEY_ID);
   const meta = await idbGetFrom(factory, IDB_META_ID);
-  if (!keyPair) return null;
-  return describeKeyPair(keyPair, meta, 'opener');
+  return key ? describeKey(key, meta, 'opener') : null;
 }
+
+// ------------------------------------------------------- encrypt/decrypt ---
+
+export const PLAINTEXT = 'Tajny tekst z iframe origin B';
+
+export async function encryptToSession(plaintext = PLAINTEXT) {
+  const key = await idbGet(IDB_KEY_ID);
+  if (!key) throw new Error('Brak klucza w IndexedDB — najpierw go utwórz');
+
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const cipher = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    new TextEncoder().encode(plaintext)
+  );
+
+  const record = {
+    iv: toB64(iv),
+    ciphertext: toB64(cipher),
+    encryptedAt: new Date().toISOString(),
+    length: plaintext.length,
+  };
+  sessionStorage.setItem(SESSION_CIPHER_KEY, JSON.stringify(record));
+  return record;
+}
+
+export function readOwnCipherRecord() {
+  const raw = sessionStorage.getItem(SESSION_CIPHER_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
+
+export function readOpenerCipherRecord() {
+  const raw = window.opener.sessionStorage.getItem(SESSION_CIPHER_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
+
+// The interesting knob: `subtle` picks WHICH realm's WebCrypto does the work,
+// `key` picks which realm the CryptoKey object came from. Mixing them is what
+// tells us whether a cross-realm key is merely readable or actually usable.
+export async function decryptRecord(subtle, key, record) {
+  const plain = await subtle.decrypt(
+    { name: 'AES-GCM', iv: fromB64(record.iv) },
+    key,
+    fromB64(record.ciphertext)
+  );
+  return new TextDecoder().decode(plain);
+}
+
+export async function decryptOwn(record) {
+  const key = await idbGet(IDB_KEY_ID);
+  if (!key) throw new Error('Brak klucza we własnym IndexedDB');
+  return decryptRecord(crypto.subtle, key, record);
+}
+
+// --------------------------------------------------------- session data ---
 
 export function writeSessionData() {
   const data = {
@@ -142,9 +199,6 @@ export function readOwnSessionData() {
   return raw ? JSON.parse(raw) : null;
 }
 
-// Popup -> opener (the iframe) direct DOM access. Same origin (B), so this is
-// allowed by the SOP; it fails when the browser partitions/severs the opener
-// relationship (noopener, COOP, or Safari-style storage partitioning).
 export function readOpenerSessionData() {
   if (!window.opener) {
     return { ok: false, error: 'Brak window.opener' };
@@ -155,4 +209,13 @@ export function readOpenerSessionData() {
   } catch (e) {
     return { ok: false, error: `${e.name}: ${e.message}` };
   }
+}
+
+// Raw key handles, for the decryption matrix in the popup.
+export function getOwnKey() {
+  return idbGet(IDB_KEY_ID);
+}
+
+export function getOpenerKey() {
+  return idbGetFrom(window.opener.indexedDB, IDB_KEY_ID);
 }
