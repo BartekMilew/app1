@@ -1,20 +1,31 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Json from './components/Json';
-import { readCryptoKey, readOpenerSessionData, readOwnSessionData } from './lib/store';
+import { requestFromOpener } from './lib/bridge';
+import {
+  readCryptoKeyFromOpener,
+  readOpenerSessionData,
+  readOwnSessionData,
+  storageDiagnostics,
+} from './lib/store';
 
 export default function PopupView() {
   const [idbResult, setIdbResult] = useState({ status: 'pending' });
   const [openerResult, setOpenerResult] = useState({ status: 'pending' });
+  const [bridgeResult, setBridgeResult] = useState({ status: 'pending' });
   const [ownSession, setOwnSession] = useState(null);
+  const [diag, setDiag] = useState(null);
 
   const run = useCallback(async () => {
     setIdbResult({ status: 'pending' });
     try {
-      const info = await readCryptoKey();
+      const info = await readCryptoKeyFromOpener();
       setIdbResult(
         info
           ? { status: 'ok', value: info }
-          : { status: 'empty', error: 'Brak klucza w IndexedDB (inny bucket?)' }
+          : {
+              status: 'empty',
+              error: 'Brak klucza w opener.indexedDB (baza otwarta, ale pusta)',
+            }
       );
     } catch (e) {
       setIdbResult({ status: 'error', error: `${e.name}: ${e.message}` });
@@ -29,7 +40,18 @@ export default function PopupView() {
       setOpenerResult({ status: 'ok', value: opener.value });
     }
 
+    setBridgeResult({ status: 'pending' });
+    const bridge = await requestFromOpener();
+    if (!bridge.ok) {
+      setBridgeResult({ status: 'error', error: bridge.error });
+    } else if (bridge.value && bridge.value.ok === false) {
+      setBridgeResult({ status: 'error', error: bridge.value.error });
+    } else {
+      setBridgeResult({ status: 'ok', value: bridge.value });
+    }
+
     setOwnSession(readOwnSessionData());
+    setDiag(await storageDiagnostics());
   }, []);
 
   useEffect(() => {
@@ -52,15 +74,25 @@ export default function PopupView() {
         </button>
       </section>
 
-      <Result title="IndexedDB — CryptoKey zapisany przez iframe" result={idbResult} />
+      <Result title="window.opener.indexedDB — CryptoKey zapisany przez iframe" result={idbResult} />
       <Result
         title="window.opener.sessionStorage — dane z iframe"
         result={openerResult}
       />
 
+      <Result
+        title="postMessage do openera — iframe czyta swój storage za nas"
+        result={bridgeResult}
+      />
+
       <section>
         <h2>Własny sessionStorage popupu</h2>
         <Json value={ownSession} />
+      </section>
+
+      <section>
+        <h2>Diagnostyka</h2>
+        <Json value={diag} />
       </section>
     </div>
   );

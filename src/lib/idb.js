@@ -2,9 +2,12 @@ const DB_NAME = 'origin-b-db';
 const DB_VERSION = 1;
 const STORE = 'keys';
 
-function openDb() {
+// `factory` lets a caller reach into another window's IDBFactory — notably
+// window.opener.indexedDB from the popup, which resolves against the opener's
+// storage bucket instead of our own (see readCryptoKeyFromOpener).
+function openDb(factory) {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    const req = factory.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) {
@@ -16,8 +19,8 @@ function openDb() {
   });
 }
 
-function tx(mode, fn) {
-  return openDb().then(
+function tx(factory, mode, fn) {
+  return openDb(factory).then(
     (db) =>
       new Promise((resolve, reject) => {
         const t = db.transaction(STORE, mode);
@@ -30,13 +33,13 @@ function tx(mode, fn) {
 }
 
 export function idbPut(key, value) {
-  return tx('readwrite', (store) => store.put(value, key));
+  return tx(indexedDB, 'readwrite', (store) => store.put(value, key));
 }
 
 export function idbGet(key) {
-  return tx('readonly', (store) => store.get(key));
+  return tx(indexedDB, 'readonly', (store) => store.get(key));
 }
 
-export function idbKeys() {
-  return tx('readonly', (store) => store.getAllKeys());
+export function idbGetFrom(factory, key) {
+  return tx(factory, 'readonly', (store) => store.get(key));
 }

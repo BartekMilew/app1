@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import Json from './components/Json';
+import { serveBridge } from './lib/bridge';
 import {
   createAndStoreCryptoKey,
   popupUrl,
+  readCryptoKey,
   readOwnSessionData,
+  requestStorageAccess,
+  storageDiagnostics,
   writeSessionData,
 } from './lib/store';
 
@@ -12,13 +16,38 @@ export default function IframeView() {
   const [sessionData, setSessionData] = useState(null);
   const [error, setError] = useState(null);
   const [log, setLog] = useState([]);
+  const [diag, setDiag] = useState(null);
 
   const append = (msg) =>
     setLog((l) => [...l, `${new Date().toLocaleTimeString()} — ${msg}`]);
 
   useEffect(() => {
     setSessionData(readOwnSessionData());
+    storageDiagnostics().then(setDiag);
   }, []);
+
+  // Serve the popup's postMessage requests: the iframe reads its own
+  // (possibly partitioned) storage and ships the result to the popup.
+  useEffect(
+    () =>
+      serveBridge(async () => ({
+        idb: await readCryptoKey(),
+        session: readOwnSessionData(),
+        servedBy: window.location.href,
+      })),
+    []
+  );
+
+  async function askStorageAccess() {
+    const res = await requestStorageAccess();
+    append(
+      res.ok
+        ? `Storage Access: przed=${res.hadBefore} po=${res.hasAfter}`
+        : `Storage Access odrzucony — ${res.error}`
+    );
+    storageDiagnostics().then(setDiag);
+    if (res.ok) await prepare();
+  }
 
   async function prepare() {
     setError(null);
@@ -71,6 +100,9 @@ export default function IframeView() {
           Zapisz dane i otwórz popup
         </button>
         <button onClick={prepare}>Tylko zapisz dane</button>
+        <button onClick={askStorageAccess}>
+          Storage Access + zapisz ponownie
+        </button>
       </section>
 
       {error && <div className="error">{error}</div>}
@@ -83,6 +115,11 @@ export default function IframeView() {
       <section>
         <h2>sessionStorage</h2>
         <Json value={sessionData} />
+      </section>
+
+      <section>
+        <h2>Diagnostyka</h2>
+        <Json value={diag} />
       </section>
 
       <section>
